@@ -1,4 +1,4 @@
-use super::{Open, Sink, SinkAsBytes, SinkError};
+use super::{Open, Sink, SinkAsBytes, SinkError, SinkResult};
 use crate::config::AudioFormat;
 use crate::convert::Converter;
 use crate::decoder::AudioPacket;
@@ -86,7 +86,7 @@ pub struct AlsaSink {
     period_buffer: Vec<u8>,
 }
 
-fn list_outputs() -> Result<(), AlsaError> {
+fn list_outputs() -> SinkResult<()> {
     println!("Listing available Alsa outputs:");
     for t in &["pcm", "ctl", "hwdep"] {
         println!("{} devices:", t);
@@ -107,7 +107,7 @@ fn list_outputs() -> Result<(), AlsaError> {
     Ok(())
 }
 
-fn open_device(dev_name: &str, format: AudioFormat) -> Result<(PCM, usize), AlsaError> {
+fn open_device(dev_name: &str, format: AudioFormat) -> SinkResult<(PCM, usize)> {
     let pcm = PCM::new(dev_name, Direction::Playback, false).map_err(|e| AlsaError::PcmSetUp {
         device: dev_name.to_string(),
         e,
@@ -218,7 +218,7 @@ impl Open for AlsaSink {
 }
 
 impl Sink for AlsaSink {
-    fn start(&mut self) -> Result<(), SinkError> {
+    fn start(&mut self) -> SinkResult<()> {
         if self.pcm.is_none() {
             let (pcm, bytes_per_period) = open_device(&self.device, self.format)?;
             self.pcm = Some(pcm);
@@ -243,7 +243,7 @@ impl Sink for AlsaSink {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), SinkError> {
+    fn stop(&mut self) -> SinkResult<()> {
         // Zero fill the remainder of the period buffer and
         // write any leftover data before draining the actual PCM buffer.
         self.period_buffer.resize(self.period_buffer.capacity(), 0);
@@ -261,7 +261,7 @@ impl Sink for AlsaSink {
 }
 
 impl SinkAsBytes for AlsaSink {
-    fn write_bytes(&mut self, data: &[u8]) -> Result<(), SinkError> {
+    fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
         let mut start_index = 0;
         let data_len = data.len();
         let capacity = self.period_buffer.capacity();
@@ -291,7 +291,7 @@ impl SinkAsBytes for AlsaSink {
 impl AlsaSink {
     pub const NAME: &'static str = "alsa";
 
-    fn write_buf(&mut self) -> Result<(), AlsaError> {
+    fn write_buf(&mut self) -> SinkResult<()> {
         let pcm = self.pcm.as_mut().ok_or(AlsaError::NotConnected)?;
 
         if let Err(e) = pcm.io_bytes().writei(&self.period_buffer) {

@@ -1,4 +1,4 @@
-use super::{Open, Sink, SinkAsBytes, SinkError};
+use super::{Open, Sink, SinkAsBytes, SinkError, SinkResult};
 use crate::config::AudioFormat;
 use crate::convert::Converter;
 use crate::decoder::AudioPacket;
@@ -71,7 +71,7 @@ impl Open for PulseAudioSink {
 }
 
 impl Sink for PulseAudioSink {
-    fn start(&mut self) -> Result<(), SinkError> {
+    fn start(&mut self) -> SinkResult<()> {
         if self.s.is_none() {
             // PulseAudio calls S24 and S24_3 different from the rest of the world
             let pulse_format = match self.format {
@@ -117,7 +117,7 @@ impl Sink for PulseAudioSink {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), SinkError> {
+    fn stop(&mut self) -> SinkResult<()> {
         let s = self.s.as_mut().ok_or(PulseError::NotConnected)?;
 
         s.drain().map_err(PulseError::DrainFailure)?;
@@ -130,7 +130,7 @@ impl Sink for PulseAudioSink {
 }
 
 impl SinkAsBytes for PulseAudioSink {
-    fn write_bytes(&mut self, data: &[u8]) -> Result<(), SinkError> {
+    fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
         let s = self.s.as_mut().ok_or(PulseError::NotConnected)?;
 
         s.write(data).map_err(PulseError::OnWrite)?;
