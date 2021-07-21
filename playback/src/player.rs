@@ -849,13 +849,15 @@ impl PlayerTrackLoader {
                 }
             };
 
-            if position_ms != 0 {
-                if let Err(err) = decoder.seek(position_ms as i64) {
+            let position_pcm = PlayerInternal::position_ms_to_pcm(position_ms);
+
+            if position_pcm != 0 {
+                if let Err(err) = decoder.seek(position_pcm) {
                     error!("Vorbis error: {}", err);
                 }
                 stream_loader_controller.set_stream_mode();
             }
-            let stream_position_pcm = PlayerInternal::position_ms_to_pcm(position_ms);
+            let stream_position_pcm = position_pcm;
             info!("<{}> ({} ms) loaded", audio.name, audio.duration);
 
             return Some(PlayerLoadedTrackData {
@@ -1480,16 +1482,18 @@ impl PlayerInternal {
                     _ => unreachable!(),
                 };
 
-                if Self::position_ms_to_pcm(position_ms) != loaded_track.stream_position_pcm {
+                let position_pcm = Self::position_ms_to_pcm(position_ms);
+
+                if position_pcm != loaded_track.stream_position_pcm {
                     loaded_track
                         .stream_loader_controller
                         .set_random_access_mode();
-                    let _ = loaded_track.decoder.seek(position_ms as i64); // This may be blocking.
-                                                                           // But most likely the track is fully
-                                                                           // loaded already because we played
-                                                                           // to the end of it.
+                    let _ = loaded_track.decoder.seek(position_pcm); // This may be blocking.
+                                                                     // But most likely the track is fully
+                                                                     // loaded already because we played
+                                                                     // to the end of it.
                     loaded_track.stream_loader_controller.set_stream_mode();
-                    loaded_track.stream_position_pcm = Self::position_ms_to_pcm(position_ms);
+                    loaded_track.stream_position_pcm = position_pcm;
                 }
                 self.preload = PlayerPreload::None;
                 self.start_playback(track_id, play_request_id, loaded_track, play);
@@ -1519,11 +1523,13 @@ impl PlayerInternal {
         {
             if current_track_id == track_id {
                 // we can use the current decoder. Ensure it's at the correct position.
-                if Self::position_ms_to_pcm(position_ms) != *stream_position_pcm {
+                let position_pcm = Self::position_ms_to_pcm(position_ms);
+
+                if position_pcm != *stream_position_pcm {
                     stream_loader_controller.set_random_access_mode();
-                    let _ = decoder.seek(position_ms as i64); // This may be blocking.
+                    let _ = decoder.seek(position_pcm); // This may be blocking.
                     stream_loader_controller.set_stream_mode();
-                    *stream_position_pcm = Self::position_ms_to_pcm(position_ms);
+                    *stream_position_pcm = position_pcm;
                 }
 
                 // Move the info from the current state into a PlayerLoadedTrackData so we can use
@@ -1586,11 +1592,13 @@ impl PlayerInternal {
                     mut loaded_track,
                 } = preload
                 {
-                    if Self::position_ms_to_pcm(position_ms) != loaded_track.stream_position_pcm {
+                    let position_pcm = Self::position_ms_to_pcm(position_ms);
+
+                    if position_pcm != loaded_track.stream_position_pcm {
                         loaded_track
                             .stream_loader_controller
                             .set_random_access_mode();
-                        let _ = loaded_track.decoder.seek(position_ms as i64); // This may be blocking
+                        let _ = loaded_track.decoder.seek(position_pcm); // This may be blocking
                         loaded_track.stream_loader_controller.set_stream_mode();
                     }
                     self.start_playback(track_id, play_request_id, *loaded_track, play);
@@ -1702,7 +1710,9 @@ impl PlayerInternal {
             stream_loader_controller.set_random_access_mode();
         }
         if let Some(decoder) = self.state.decoder() {
-            match decoder.seek(position_ms as i64) {
+            let position_pcm = Self::position_ms_to_pcm(position_ms);
+
+            match decoder.seek(position_pcm) {
                 Ok(_) => {
                     if let PlayerState::Playing {
                         ref mut stream_position_pcm,
@@ -1713,7 +1723,7 @@ impl PlayerInternal {
                         ..
                     } = self.state
                     {
-                        *stream_position_pcm = Self::position_ms_to_pcm(position_ms);
+                        *stream_position_pcm = position_pcm;
                     }
                 }
                 Err(err) => error!("Vorbis Error: {:?}", err),
